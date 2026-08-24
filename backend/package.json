@@ -1,0 +1,30 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "prisma": "^6.0.0",
+    "@prisma/client": "^6.0.0",
+    "bcryptjs": "*",
+    "cors": "*",
+    "dotenv": "*",
+    "express": "*",
+    "jsonwebtoken": "*",
+    "node-cron": "*",
+    "nodemailer": "*",
+    "qrcode": "*",
+    "socket.io": "*",
+    "uuid": "*"
+  },
+  "devDependencies": {
+    "nodemon": "*"
+  }
+  ,
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}

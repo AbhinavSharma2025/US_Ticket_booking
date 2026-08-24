@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  ORGANISER
+  ADMIN
+}
+
+enum EventType {
+  MOVIE
+  CONCERT
+}
+
+enum ShowSeatStatus {
+  AVAILABLE
+  HELD
+  BOOKED
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+enum WaitlistStatus {
+  WAITING
+  OFFERED
+  EXPIRED
+  FULFILLED
+}
+
+model User {
+  id               String           @id @default(uuid()) @db.Uuid
+  name             String
+  email            String           @unique
+  passwordHash     String
+  role             UserRole         @default(CUSTOMER)
+  createdAt        DateTime         @default(now())
+
+  createdVenues    Venue[]          @relation("VenueCreatedBy")
+  organisedEvents  Event[]          @relation("UserOrganisedEvents")
+  bookings         Booking[]        @relation("UserBookings")
+  heldShowSeats    ShowSeat[]       @relation("UserHeldShowSeats")
+  waitlistEntries  WaitlistEntry[]  @relation("UserWaitlistEntries")
+}
+
+model Venue {
+  id             String          @id @default(uuid()) @db.Uuid
+  name           String
+  address        String
+  layout         Json
+  createdAt      DateTime        @default(now())
+
+  createdById    String?         @db.Uuid
+  createdBy      User?           @relation("VenueCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  seatCategories SeatCategory[]  @relation("VenueSeatCategories")
+  seats          Seat[]          @relation("VenueSeats")
+  shows          Show[]
+}
+
+model SeatCategory {
+  id       String   @id @default(uuid()) @db.Uuid
+  venueId  String   @db.Uuid
+  venue    Venue    @relation("VenueSeatCategories", fields: [venueId], references: [id], onDelete: Cascade)
+  name     String
+
+  seats            Seat[]
+  shows            ShowSeatCategory[]
+  waitlistEntries  WaitlistEntry[]
+
+  @@unique([venueId, name])
+}
+
+model Seat {
+  id         String       @id @default(uuid()) @db.Uuid
+  venueId    String       @db.Uuid
+  venue      Venue        @relation("VenueSeats", fields: [venueId], references: [id], onDelete: Cascade)
+  categoryId String       @db.Uuid
+  category   SeatCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  rowLabel   String
+  seatNumber Int
+
+  showSeats  ShowSeat[]
+
+  @@unique([venueId, rowLabel, seatNumber])
+}
+
+model Event {
+  id          String    @id @default(uuid()) @db.Uuid
+  title       String
+  description String?
+  type        EventType
+  createdAt   DateTime  @default(now())
+
+  organiserId String?   @db.Uuid
+  organiser   User?     @relation("UserOrganisedEvents", fields: [organiserId], references: [id], onDelete: SetNull)
+
+  shows       Show[]
+}
+
+model Show {
+  id        String    @id @default(uuid()) @db.Uuid
+  eventId   String    @db.Uuid
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  venueId   String    @db.Uuid
+  venue     Venue     @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  date      DateTime
+  startTime DateTime
+  createdAt DateTime  @default(now())
+
+  seatCategories  ShowSeatCategory[]
+  seats           ShowSeat[]
+  bookings        Booking[]
+  waitlistEntries WaitlistEntry[]
+}
+
+model ShowSeatCategory {
+  id         String       @id @default(uuid()) @db.Uuid
+  showId     String       @db.Uuid
+  show       Show         @relation(fields: [showId], references: [id], onDelete: Cascade)
+  categoryId String       @db.Uuid
+  category   SeatCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  price      Decimal      @db.Decimal(10, 2)
+
+  @@unique([showId, categoryId])
+}
+
+model ShowSeat {
+  id         String         @id @default(uuid()) @db.Uuid
+  showId     String         @db.Uuid
+  show       Show           @relation(fields: [showId], references: [id], onDelete: Cascade)
+  seatId     String         @db.Uuid
+  seat       Seat           @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  status     ShowSeatStatus @default(AVAILABLE)
+
+  heldById   String?        @db.Uuid
+  heldBy     User?          @relation("UserHeldShowSeats", fields: [heldById], references: [id], onDelete: SetNull)
+  heldUntil  DateTime?
+  updatedAt  DateTime       @updatedAt
+
+  bookingSeats BookingSeat[]
+
+  @@unique([showId, seatId])
+  @@index([showId, status])
+  @@index([heldUntil])
+}
+
+model Booking {
+  id          String        @id @default(uuid()) @db.Uuid
+  userId      String?       @db.Uuid
+  user        User?         @relation("UserBookings", fields: [userId], references: [id], onDelete: SetNull)
+  showId      String        @db.Uuid
+  show        Show          @relation(fields: [showId], references: [id])
+  status      BookingStatus @default(CONFIRMED)
+  totalAmount Decimal       @db.Decimal(10, 2)
+  qrCodeData  String?
+  createdAt   DateTime      @default(now())
+
+  seats       BookingSeat[]
+}
+
+model BookingSeat {
+  id         String   @id @default(uuid()) @db.Uuid
+  bookingId  String   @db.Uuid
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  showSeatId String   @db.Uuid
+  showSeat   ShowSeat @relation(fields: [showSeatId], references: [id], onDelete: Cascade)
+}
+
+model WaitlistEntry {
+  id             String         @id @default(uuid()) @db.Uuid
+  showId         String         @db.Uuid
+  show           Show           @relation(fields: [showId], references: [id], onDelete: Cascade)
+  categoryId     String         @db.Uuid
+  category       SeatCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  userId         String         @db.Uuid
+  user           User           @relation("UserWaitlistEntries", fields: [userId], references: [id], onDelete: Cascade)
+  status         WaitlistStatus @default(WAITING)
+  position       Int
+  offeredAt      DateTime?
+  offerExpiresAt DateTime?
+  createdAt      DateTime       @default(now())
+
+  @@index([showId, categoryId, status, position])
+}
